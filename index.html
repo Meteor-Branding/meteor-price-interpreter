@@ -878,8 +878,7 @@
                         if (rowModel !== upperModel) return false;
 
                         // 2. Version Check (incl generic)
-                        const versionMatch = !version || rowVersion === '' || rowVersion === upperVersion ||
-                            rowVersion.includes(upperVersion) || upperVersion.includes(rowVersion);
+                        const versionMatch = !version || rowVersion === '' || rowVersion === upperVersion;
                         if (!versionMatch) return false;
 
                         // 3. Segment Match (Spec Name column holds component codes)
@@ -960,10 +959,7 @@
                 if (version) {
                     filteredData = filteredData.filter(row => {
                         const rowVersion = getObjVal(row, 'Version').toUpperCase();
-                        return rowVersion === '' ||
-                            rowVersion === upperVersion ||
-                            rowVersion.includes(upperVersion) ||
-                            upperVersion.includes(rowVersion);
+                        return rowVersion === '' || rowVersion === upperVersion;
                     });
                     console.log(`[PriceLookup] After Version filter: ${filteredData.length} rows (Version="${upperVersion}")`);
                 }
@@ -1131,10 +1127,8 @@
                                 rowModel === upperModelName ||
                                 rowModel === upperSpecName;
 
-                            // Version matching (flexible)
-                            const versionMatch = rowVersion === upperVersion ||
-                                rowVersion.includes(upperVersion) ||
-                                upperVersion.includes(rowVersion);
+                            // Version matching (strict)
+                            const versionMatch = rowVersion === upperVersion;
 
                             return nameMatch && versionMatch;
                         });
