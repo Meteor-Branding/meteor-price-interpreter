@@ -1,1613 +1,790 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Spec Interpreter</title>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
-        rel="stylesheet">
+    <title>3D 最佳化棧板堆疊計算器 (多棧板版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
-        :root {
-            --bg-color: #e8e4d1;
-            --panel-bg: #f1f0e4;
-            --border-color: #000000;
-            --text-color: #000000;
-            --accent-color: #2a4d69;
-            --success-color: #1a7f37;
-            --error-color: #cf222e;
-            --version-color: #8957e5;
-            --input-bg: #ffffff;
-            --card-shadow: 4px 4px 0px 0px #000000;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            height: 100vh;
-            display: grid;
-            grid-template-columns: 280px 1fr;
+            margin: 0;
             overflow: hidden;
-            font-size: 16px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* Fixed Sidebar Controls */
-        #sidebar {
-            background-color: var(--bg-color);
-            border-right: 2px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 25px;
-            gap: 25px;
-            z-index: 100;
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            background: #f0f0f0;
         }
 
-        .sidebar-section {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 5px 0 15px rgba(0, 0, 0, 0.05);
         }
 
-        .app-logo {
-            font-size: 1.25em;
-            font-weight: 800;
-            color: var(--accent-color);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 10px;
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
         }
 
-        /* Layout */
-        #main-content {
-            flex-grow: 1;
-            padding: 30px;
-            overflow-y: auto;
-            position: relative;
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
         }
 
-        .content-container {
-            max-width: 1000px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
         }
 
-        h1 {
-            font-size: 2.4em;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: -1px;
-            color: var(--accent-color);
-        }
-
-        .intro {
-            color: #555;
-            margin-bottom: 10px;
-            font-size: 1em;
-        }
-
-        label {
-            font-weight: 800;
-            font-size: 0.9em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-            color: var(--accent-color);
-        }
-
-        /* Retro Inputs */
-        textarea {
-            background-color: var(--input-bg);
-            border: 2px solid var(--border-color);
-            border-radius: 0;
-            color: var(--text-color);
-            padding: 15px;
-            font-size: 1.1em;
-            line-height: 1.4;
-            resize: vertical;
-            min-height: 140px;
-            transition: all 0.2s ease;
-            width: 100%;
-            box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.1);
-        }
-
-        textarea:focus {
-            outline: none;
-            box-shadow: 4px 4px 0px 0px #000000;
-        }
-
-        /* Action Buttons */
-        button {
-            background-color: var(--input-bg);
-            color: var(--text-color);
-            border: 2px solid var(--border-color);
-            border-radius: 0;
-            padding: 12px 20px;
-            font-size: 1em;
-            font-weight: 800;
-            cursor: pointer;
-            transition: all 0.1s ease;
-            text-transform: uppercase;
-            box-shadow: 2px 2px 0px 0px #000000;
-        }
-
-        button:hover:not(:disabled) {
-            transform: translate(-1px, -1px);
-            box-shadow: 3px 3px 0px 0px #000000;
-        }
-
-        button:active:not(:disabled) {
-            transform: translate(1px, 1px);
-            box-shadow: 1px 1px 0px 0px #000000;
-        }
-
-        button:disabled {
-            background-color: #d8d4c1;
-            color: #8b8b7a;
-            border-color: #8b8b7a;
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background-color: #000000;
-            color: #ffffff;
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            background-color: #333333;
-        }
-
-        /* Sidebar Elements */
-        #drop-zone {
-            border: 2px dashed var(--border-color);
-            border-radius: 0;
-            padding: 15px;
-            text-align: center;
-            cursor: pointer;
-            background-color: var(--input-bg);
-            transition: all 0.2s ease;
-        }
-
-        #drop-zone.file-loaded {
-            border-style: solid;
-            background-color: #ffffff;
-            border-color: var(--success-color);
-        }
-
-        .sidebar-btn-stack {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        /* Result Items (Cards) */
-        #results {
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-        }
-
-        .result-item {
-            background-color: var(--panel-bg);
-            border: 2px solid var(--border-color);
-            padding: 20px;
-            animation: slideIn 0.3s ease forwards;
-            position: relative;
-            box-shadow: var(--card-shadow);
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 12px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-            margin-bottom: 15px;
-        }
-
-        .code-snippet {
-            font-weight: 800;
-            font-size: 1.25em;
-            word-break: break-all;
-            color: var(--accent-color);
-        }
-
-        .qty-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: #ffffff;
-            padding: 4px 10px;
-            border: 2px solid var(--border-color);
-        }
-
-        .qty-input {
-            background: transparent;
-            border: none;
-            color: var(--text-color);
-            width: 40px;
-            font-weight: 800;
-            text-align: center;
-            outline: none;
-        }
-
-        .model-name {
-            font-size: 1.25em;
-            margin-bottom: 8px;
-            font-weight: 800;
-            color: var(--success-color);
-        }
-
-        .version-name {
-            font-size: 1.15em;
-            margin-bottom: 12px;
-            color: var(--version-color);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 700;
-        }
-
-        .override-btn {
-            font-size: 0.7em;
-            padding: 4px 8px;
-            margin-left: 10px;
-            box-shadow: 2px 2px 0px 0px #000;
-            background: white;
-            color: black;
-        }
-
-        .select-fallback {
-            background-color: #ffffff;
-            border: 2px solid var(--border-color);
-            font-family: 'JetBrains Mono', monospace;
-            padding: 8px;
-            font-size: 0.9em;
-            width: 100%;
-        }
-
-        .fallback-group {
-            margin-top: 15px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.03);
-            border: 1px dashed var(--border-color);
-        }
-
-        .sequence-info {
-            font-size: 0.85em;
-            color: #444;
-            margin-top: 12px;
-            padding: 8px;
-            background: rgba(0, 0, 0, 0.02);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        /* Price Section */
-        .price-section {
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 2px solid var(--border-color);
-        }
-
-        .price-warning {
-            background: #fff;
-            border: 2px solid var(--error-color);
-            color: var(--error-color);
-            padding: 10px;
-            margin-bottom: 15px;
-            font-weight: 800;
-            font-size: 0.9em;
-        }
-
-        .price-conflict {
-            background: #fff0f0;
-            border: 3px solid var(--error-color);
-            color: var(--error-color);
-            padding: 15px;
-            margin-bottom: 20px;
-            font-weight: 800;
-            font-size: 1em;
-            box-shadow: 4px 4px 0px 0px var(--error-color);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .price-conflict-title {
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border-bottom: 2px solid var(--error-color);
-            padding-bottom: 5px;
-            margin-bottom: 5px;
-        }
-
-        .price-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            font-size: 1em;
-        }
-
-        .price-table th {
-            text-align: left;
-            padding: 10px;
-            border-bottom: 2px solid var(--border-color);
-            font-weight: 800;
-            text-transform: uppercase;
-            font-size: 0.85em;
-            color: var(--accent-color);
-        }
-
-        .price-table td {
-            padding: 10px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        .price-table .segment-code {
-            font-weight: 800;
-        }
-
-        .price-table .price-cell {
-            text-align: right;
-            font-weight: 700;
-        }
-
-        .price-table .price-error {
-            color: var(--error-color);
-            font-weight: 800;
-        }
-
-        .price-table .price-zero {
-            color: #888;
-        }
-
-        .price-summary {
-            background: #ffffff;
-            border: 2px solid var(--border-color);
-            padding: 15px;
-            margin-top: 15px;
-        }
-
-        .price-summary-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-
-        .price-summary-row.total {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 2px dashed var(--border-color);
-            font-weight: 800;
-            font-size: 1.3em;
-            color: var(--success-color);
-        }
-
-        .price-summary-values {
-            display: flex;
-            gap: 20px;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        #progress {
-            color: var(--accent-color);
-            font-weight: 700;
-            margin-top: 10px;
-            padding: 10px;
-            border: 1px solid #777;
-            background: #fff;
-            display: none;
-        }
-
-        #progress.visible {
-            display: block;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
     </style>
 </head>
 
 <body>
-    <nav id="sidebar">
-        <div class="app-logo">
-            <span>⚡</span> Price Check
+
+    <!-- Control Panel -->
+    <div class="fixed top-0 left-0 h-full w-80 glass-panel z-10 flex flex-col transition-transform duration-300 transform translate-x-0"
+        id="sidebar">
+        <div class="p-5 border-b border-gray-200 bg-gray-50">
+            <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                棧板堆疊計算器
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">輸入尺寸以計算最佳堆疊方案</p>
         </div>
 
-        <div class="sidebar-section">
-            <label>Master Data</label>
-            <div id="drop-zone">
-                <div style="font-size: 24px; margin-bottom: 8px;">📁</div>
-                <div style="font-weight: 600;">Sync Database</div>
-                <p style="font-size: 0.8em; color: #8b949e; margin-top: 4px;">D:\Price Check\...</p>
-                <input type="file" id="file-input" style="display: none;" accept=".xlsm,.xlsx">
-            </div>
-            <div id="file-status">No data synced</div>
-        </div>
+        <div class="flex-1 overflow-y-auto p-5 space-y-6">
 
-        <div class="sidebar-section">
-            <label>Actions</label>
-            <div class="sidebar-btn-stack">
-                <button id="search-btn" disabled>
-                    <span>SEARCH</span>
+            <!-- Pallet Settings -->
+            <div class="space-y-3">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider border-b pb-1">1. 棧板設定 (cm)</h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">長度 (L)</label>
+                        <input type="number" id="palletL" value="120"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            min="1">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">寬度 (W)</label>
+                        <input type="number" id="palletW" value="100"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            min="1">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">高度 (H)</label>
+                        <input type="number" id="palletH" value="15"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            min="1">
+                    </div>
+                    <div class="col-span-3">
+                        <label class="block text-xs text-gray-500 mb-1">含棧板最大高度限制 (總高)</label>
+                        <input type="number" id="maxH" value="200"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            min="1">
+                    </div>
+                </div>
+                <button onclick="addPalletType()"
+                    class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-medium transition-colors flex justify-center items-center gap-1">
+                    <span class="text-lg">+</span> 新增棧板至清單
                 </button>
-                <button id="price-btn" class="btn-secondary" disabled>
-                    <span>GET PRICES</span>
+            </div>
+
+            <!-- Pallet List -->
+            <div class="space-y-2">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider border-b pb-1">可用棧板清單</h2>
+                <div id="palletListContainer" class="space-y-2 min-h-[50px]">
+                    <div class="text-xs text-gray-400 text-center italic p-2">尚未加入棧板</div>
+                </div>
+            </div>
+
+            <!-- Box Settings -->
+            <div class="space-y-3">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider border-b pb-1">2. 新增箱子 (cm)</h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs text-gray-500">長</label>
+                        <input type="number" id="boxL" value="40" class="w-full p-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500">寬</label>
+                        <input type="number" id="boxW" value="30" class="w-full p-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500">高</label>
+                        <input type="number" id="boxH" value="25" class="w-full p-1 border rounded text-sm">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 items-center">
+                    <div>
+                        <label class="block text-xs text-gray-500">數量</label>
+                        <input type="number" id="boxQty" value="25" class="w-full p-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500">顏色</label>
+                        <input type="color" id="boxColor" value="#3B82F6"
+                            class="w-full h-8 p-0 border rounded cursor-pointer">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">指定棧板 (可選)</label>
+                    <select id="boxTargetPallet" class="w-full p-1 border rounded text-sm text-gray-700 bg-white">
+                        <option value="">自動安排</option>
+                    </select>
+                </div>
+                <!-- New Option: This side up -->
+                <div class="flex items-center gap-2 py-1">
+                    <input type="checkbox" id="boxOnlyUp"
+                        class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300">
+                    <label for="boxOnlyUp" class="text-sm text-gray-700">限制此面朝上 <span
+                            class="text-xs text-gray-400">(不可倒放/側放)</span></label>
+                </div>
+
+                <button onclick="addBoxType()"
+                    class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-medium transition-colors flex justify-center items-center gap-1">
+                    <span class="text-lg">+</span> 新增至清單
                 </button>
             </div>
-            <div id="progress" style="font-size: 0.85em; text-align: center;">Processing...</div>
+
+            <!-- Box List -->
+            <div class="space-y-2">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider border-b pb-1">待裝箱清單</h2>
+                <div id="boxListContainer" class="space-y-2 min-h-[100px]">
+                    <!-- Dynamic Items -->
+                    <div class="text-xs text-gray-400 text-center italic p-2">尚未加入箱子</div>
+                </div>
+            </div>
+
         </div>
 
-        <div style="margin-top: auto; font-size: 0.75em; color: #484f58;">
-            v1.6 by Samuel
+        <!-- Action Buttons -->
+        <div class="p-5 border-t border-gray-200 bg-white space-y-3">
+            <button onclick="calculatePacking()"
+                class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg font-bold transition-transform transform active:scale-95 flex justify-center items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                開始多棧板計算
+            </button>
+            <button onclick="resetScene()"
+                class="w-full py-2 bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium">
+                重置場景
+            </button>
         </div>
-    </nav>
+    </div>
 
-    <main id="main-content">
-        <div class="content-container">
-            <header>
-                <h1>Specification Interpreter</h1>
-                <p class="intro">
-                    Identify models and calculate itemized pricing for luminaire catalog codes.
-                </p>
-            </header>
+    <!-- Toggle Button for Mobile/Small screens -->
+    <button onclick="toggleSidebar()" class="fixed top-4 left-4 z-20 bg-white p-2 rounded-full shadow-md md:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+    </button>
 
-            <section class="input-group">
-                <label for="code-input">Product Codes (one per line)</label>
-                <textarea id="code-input"
-                    placeholder="Enter codes e.g.&#10;TSC-400-C308-UNV-DMX-40-BLK-BRK-GSV-SLP x5&#10;ASII10-220-278-UNV-SPV-30-BLK-ST4-HC x2"></textarea>
-            </section>
-
-            <section id="results"></section>
+    <!-- Results & Navigation Overlay -->
+    <div id="resultsOverlay"
+        class="fixed top-4 right-4 bg-white/95 backdrop-blur p-4 rounded-lg shadow-lg z-10 hidden w-64 border border-gray-100">
+        <div class="mb-4 border-b pb-2">
+            <h3 class="font-bold text-gray-800 text-lg">計算結果</h3>
+            <div class="text-xs text-gray-500 mt-1">需總棧板數: <span id="totalPalletsCount"
+                    class="text-blue-600 font-bold text-base">0</span> 個</div>
+            <div class="text-xs text-gray-500">未成功裝載: <span id="globalFailedCount"
+                    class="text-red-500 font-bold">0</span> 個 (尺寸過大)</div>
         </div>
-    </main>
+
+        <!-- Pallet Navigation -->
+        <div class="flex items-center justify-between mb-4 bg-gray-50 p-2 rounded">
+            <button onclick="switchPallet(-1)" id="prevPalletBtn"
+                class="p-1 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <div class="text-center">
+                <div class="text-xs text-gray-400 uppercase font-bold">目前檢視</div>
+                <div class="font-bold text-blue-700">棧板 <span id="currentPalletNum">1</span></div>
+            </div>
+            <button onclick="switchPallet(1)" id="nextPalletBtn"
+                class="p-1 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Current Pallet Stats -->
+        <div class="text-sm space-y-1">
+            <div class="font-semibold text-gray-700 border-b pb-1 mb-1">本棧板詳情</div>
+            <div class="flex justify-between"><span>箱數:</span> <span id="resPacked"
+                    class="font-mono text-green-600 font-bold">0</span></div>
+            <div class="flex justify-between"><span>堆疊高度:</span> <span id="resHeight"
+                    class="font-mono font-bold">0</span> cm</div>
+            <div class="flex justify-between"><span>空間利用率:</span> <span id="resVol"
+                    class="font-mono text-blue-600 font-bold">0%</span></div>
+        </div>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
 
     <script>
-        // =========================
-        // DATA STORAGE
-        // =========================
-        const AppData = {
-            dataTable: [],
-            groupSentence: [],
-            uniqueModels: [],
-            uniqueSpecNames: []
-        };
+        // --- State Management ---
+        let palletTypes = [];
+        let boxTypes = [];
+        let scene, camera, renderer, controls;
+        let palletMesh, boxMeshes = [];
 
-        const getObjVal = (obj, keyName) => {
-            if (!obj) return '';
-            const foundKey = Object.keys(obj).find(k => k.trim().toLowerCase() === keyName.toLowerCase());
-            return foundKey ? String(obj[foundKey] || '').trim() : '';
-        };
+        // Multi-pallet state
+        let allPalletsData = []; // Array of objects { config, boxes }
+        let currentPalletIndex = 0;
 
-        // =========================
-        // SPECIAL CUSTOM LOGIC
-        // =========================
-        const SpecialRules = {
-            // Rule: Certain models should ignore Outdoor/Natatorium detection
-            ignoreOutdoorDetection(specName) {
-                return ['LA6', 'NL2', 'NL4', 'NLC'].includes(specName.toUpperCase());
-            },
+        // --- 3D Initialization ---
+        function init3D() {
+            const container = document.getElementById('canvas-container');
 
-            // Rule: Handle wildcard patterns like PL#(2/4/6/8/10) and CM#(2/4/6/8/10)
-            getCustomSegmentMatches(upperSeg, filteredData) {
-                const wildcardMatch = upperSeg.match(/^(PL|CM)(\d+)(RM)?$/);
-                if (wildcardMatch) {
-                    const prefixCode = wildcardMatch[1];
-                    const number = wildcardMatch[2];
-                    const suffix = wildcardMatch[3] || "";
-                    const targetPrefix = suffix === "RM" ? prefixCode + "#RM" : prefixCode + "#";
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f2f5);
+            scene.fog = new THREE.Fog(0xf0f2f5, 200, 1000);
 
-                    return filteredData.filter(row => {
-                        const rowCode = getObjVal(row, 'Spec Name').toUpperCase();
-                        if (!rowCode.startsWith(targetPrefix)) return false;
-                        const parenContent = rowCode.match(/\((.*?)\)/);
-                        if (parenContent) {
-                            const validNumbers = parenContent[1].split('/').map(n => n.trim());
-                            return validNumbers.includes(number);
-                        }
-                        return false;
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.set(300, 300, 300);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent going below ground
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(200, 400, 200);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            // Grid & Ground
+            const gridHelper = new THREE.GridHelper(1000, 50, 0xcccccc, 0xe5e5e5);
+            scene.add(gridHelper);
+
+            const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
+            const groundMaterial = new THREE.MeshPhongMaterial({ color: 0xf0f2f5, depthWrite: false });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Initial Visuals
+            updatePalletVisuals({ l: 120, w: 100, h: 15 });
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Logic: Pallet Management ---
+        function addPalletType() {
+            const l = parseFloat(document.getElementById('palletL').value);
+            const w = parseFloat(document.getElementById('palletW').value);
+            const h = parseFloat(document.getElementById('palletH').value);
+            const maxH = parseFloat(document.getElementById('maxH').value);
+
+            if (l <= 0 || w <= 0 || h <= 0 || maxH <= 0) {
+                alert("請輸入有效的正整數尺寸");
+                return;
+            }
+
+            const id = Date.now();
+            palletTypes.push({ id, l, w, h, maxH });
+            renderPalletList();
+
+            // Default visual to the last added pallet
+            updatePalletVisuals(palletTypes[palletTypes.length - 1]);
+        }
+
+        function removePalletType(id) {
+            palletTypes = palletTypes.filter(p => p.id !== id);
+            renderPalletList();
+        }
+
+        function updatePalletSelectOptions() {
+            const select = document.getElementById('boxTargetPallet');
+            if (!select) return;
+            const currentValue = select.value;
+
+            let optionsHtml = '<option value="">自動安排</option>';
+            palletTypes.forEach((p, index) => {
+                optionsHtml += `<option value="${p.id}">棧板 #${index + 1} (${p.l}x${p.w})</option>`;
+            });
+
+            select.innerHTML = optionsHtml;
+            if (palletTypes.find(p => p.id.toString() === currentValue)) {
+                select.value = currentValue;
+            }
+        }
+
+        function renderPalletList() {
+            updatePalletSelectOptions();
+            const container = document.getElementById('palletListContainer');
+            if (palletTypes.length === 0) {
+                container.innerHTML = '<div class="text-xs text-gray-400 text-center italic p-2">尚未加入棧板</div>';
+                return;
+            }
+
+            container.innerHTML = palletTypes.map((p, index) => `
+                <div class="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded">#${index + 1}</div>
+                        <div>
+                            <div class="font-bold text-gray-700 flex items-center gap-1">
+                                ${p.l} x ${p.w} <span class="text-xs font-normal text-gray-500">(高: ${p.h})</span>
+                            </div>
+                            <div class="text-xs text-gray-500">最大總高: ${p.maxH}</div>
+                        </div>
+                    </div>
+                    <button onclick="removePalletType(${p.id})" class="text-red-400 hover:text-red-600 p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function addBoxType() {
+            let l = parseFloat(document.getElementById('boxL').value);
+            let w = parseFloat(document.getElementById('boxW').value);
+            const h = parseFloat(document.getElementById('boxH').value);
+            const qty = parseInt(document.getElementById('boxQty').value);
+            const color = document.getElementById('boxColor').value;
+            const onlyUp = document.getElementById('boxOnlyUp').checked;
+            const targetPalletId = document.getElementById('boxTargetPallet').value;
+
+            if (l <= 0 || w <= 0 || h <= 0 || qty <= 0) {
+                alert("請輸入有效的正整數尺寸和數量");
+                return;
+            }
+
+            // Auto-swap L and W if L < W
+            if (l < w) {
+                let temp = l;
+                l = w;
+                w = temp;
+                document.getElementById('boxL').value = l;
+                document.getElementById('boxW').value = w;
+            }
+
+            const id = Date.now();
+            boxTypes.push({ id, l, w, h, qty, color, onlyUp, targetPalletId });
+            renderBoxList();
+
+            // Generate random color for next input
+            document.getElementById('boxColor').value = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+        }
+
+        function removeBoxType(id) {
+            boxTypes = boxTypes.filter(b => b.id !== id);
+            renderBoxList();
+        }
+
+        function renderBoxList() {
+            const container = document.getElementById('boxListContainer');
+            if (boxTypes.length === 0) {
+                container.innerHTML = '<div class="text-xs text-gray-400 text-center italic p-2">尚未加入箱子</div>';
+                return;
+            }
+
+            container.innerHTML = boxTypes.map(b => `
+                <div class="flex items-center justify-between bg-white p-2 rounded border border-gray-200 shadow-sm text-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full border border-gray-300" style="background-color: ${b.color}"></div>
+                        <div>
+                            <div class="font-bold text-gray-700 flex items-center gap-1">
+                                ${b.l} x ${b.w} x ${b.h}
+                                ${b.onlyUp ? '<span title="此面朝上" class="bg-blue-100 text-blue-600 text-[10px] px-1 rounded border border-blue-200 cursor-help">⬆ 此面朝上</span>' : ''}
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                數量: ${b.qty} 
+                                <span class="ml-2 px-1 rounded bg-gray-100 border border-gray-200">
+                                    ${b.targetPalletId ? `指定棧板: #${palletTypes.findIndex(p => p.id.toString() === b.targetPalletId) + 1}` : '自動安排'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="removeBoxType(${b.id})" class="text-red-400 hover:text-red-600 p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updatePalletVisuals(palletConfig) {
+            if (!palletConfig) return;
+            const pL = palletConfig.l;
+            const pW = palletConfig.w;
+            const pH = palletConfig.h;
+
+            // Remove old
+            if (palletMesh) scene.remove(palletMesh);
+
+            // Create Pallet Geometry (Wood-like)
+            const geometry = new THREE.BoxGeometry(pL, pH, pW);
+            const material = new THREE.MeshStandardMaterial({ color: 0xd2b48c });
+            palletMesh = new THREE.Mesh(geometry, material);
+
+            // Position: Center of pallet at (pL/2, pH/2, pW/2)
+            palletMesh.position.set(pL / 2, pH / 2, pW / 2);
+            palletMesh.castShadow = true;
+            palletMesh.receiveShadow = true;
+
+            scene.add(palletMesh);
+
+            // Clear old boxes
+            boxMeshes.forEach(m => scene.remove(m));
+            boxMeshes = [];
+
+            // Reset Camera target
+            controls.target.set(pL / 2, Math.max(50, pH), pW / 2);
+        }
+
+        function resetScene() {
+            allPalletsData = [];
+            currentPalletIndex = 0;
+            if (palletTypes.length > 0) {
+                updatePalletVisuals(palletTypes[0]);
+            }
+            document.getElementById('resultsOverlay').classList.add('hidden');
+        }
+
+        // --- Multi-Pallet Logic ---
+        function calculatePacking() {
+            if (palletTypes.length === 0) {
+                alert("請先至少新增一種棧板尺寸至清單");
+                return;
+            }
+            if (boxTypes.length === 0) {
+                alert("請先至少新增一種箱子至清單");
+                return;
+            }
+
+            // 1. Flatten items
+            let itemsToPack = [];
+            boxTypes.forEach(type => {
+                // Verify if assigned pallet still exists, otherwise reset to auto
+                const isPalletValid = type.targetPalletId === "" || palletTypes.some(p => p.id.toString() === type.targetPalletId);
+                const actualTargetId = isPalletValid ? type.targetPalletId : "";
+
+                for (let i = 0; i < type.qty; i++) {
+                    itemsToPack.push({ ...type, targetPalletId: actualTargetId, uuid: Math.random() });
+                }
+            });
+
+            // 2. Sort (Largest Volume First)
+            itemsToPack.sort((a, b) => (b.l * b.w * b.h) - (a.l * a.w * a.h));
+
+            allPalletsData = [];
+            let globalFailedItems = [];
+
+            // Helper to pack exactly one pallet instance
+            function packOnePalletInstance(itemsSubset, config) {
+                let currentPalletPacked = [];
+                let nextBatchItems = [];
+                let anchorPoints = [{ x: 0, y: 0, z: 0 }];
+
+                const palletL = config.l;
+                const palletW = config.w;
+                const availableMaxH = config.maxH - config.h;
+
+                for (let i = 0; i < itemsSubset.length; i++) {
+                    const item = itemsSubset[i];
+                    let bestFit = null;
+
+                    // Sort Anchors
+                    anchorPoints.sort((a, b) => {
+                        if (a.y !== b.y) return a.y - b.y;
+                        if (a.z !== b.z) return a.z - b.z;
+                        return a.x - b.x;
                     });
-                }
-                return [];
-            },
 
-            // Rule: When searching for RGB specifically, ignore strings that contain W+RGB or RGBW
-            refineVersionMatches(versionList, keyword) {
-                const upperKW = keyword.toUpperCase();
-                if (upperKW === 'RGB') {
-                    const filtered = versionList.filter(v => {
-                        const uv = v.toUpperCase();
-                        return !uv.includes('W+RGB') && !uv.includes('RGBW');
+                    // Orientations logic
+                    const dims = [item.l, item.w, item.h];
+                    let allOrientations = [
+                        { l: dims[0], w: dims[1], h: dims[2] },
+                        { l: dims[0], w: dims[2], h: dims[1] },
+                        { l: dims[1], w: dims[0], h: dims[2] },
+                        { l: dims[1], w: dims[2], h: dims[0] },
+                        { l: dims[2], w: dims[0], h: dims[1] },
+                        { l: dims[2], w: dims[1], h: dims[0] }
+                    ];
+
+                    if (item.onlyUp) {
+                        allOrientations = allOrientations.filter(o => Math.abs(o.h - item.h) < 0.001);
+                    }
+
+                    // De-dupe orientations
+                    const uniqueOrientations = [];
+                    const seenOrientations = new Set();
+                    allOrientations.forEach(o => {
+                        const key = `${o.l}-${o.w}-${o.h}`;
+                        if (!seenOrientations.has(key)) {
+                            seenOrientations.add(key);
+                            uniqueOrientations.push(o);
+                        }
                     });
-                    return filtered.length > 0 ? filtered : versionList;
-                }
-                return versionList;
-            },
 
-            // MODEL-SPECIFIC VERSION DETECTION OVERRIDES
-            getCustomVersionDetection(specName, segments, validCCTCodes) {
-                const upperSpec = specName.toUpperCase();
+                    // Helper functions for THIS pallet instance
+                    const intersect = (b1, b2) => {
+                        return !(b2.x >= b1.x + b1.l || b2.x + b2.l <= b1.x || b2.y >= b1.y + b1.h || b2.y + b2.h <= b1.y || b2.z >= b1.z + b1.w || b2.z + b2.w <= b1.z);
+                    };
 
-                // Case: BLTMW (308B pattern -> Tunable White)
-                if (upperSpec === 'BLTMW') {
-                    if (segments.some(s => /^\d{3}B$/i.test(s))) {
-                        const seg = segments.find(s => /^\d{3}B$/i.test(s));
-                        if (validCCTCodes.includes(seg.slice(0, 3))) {
-                            return { type: 'Tunable White', keyword: 'Tunable White' };
-                        }
-                    }
-                }
+                    const isValidPos = (boxDim, x, y, z, currentPacked) => {
+                        if (x + boxDim.l > palletL) return false;
+                        if (z + boxDim.w > palletW) return false;
+                        if (y + boxDim.h > availableMaxH) return false;
 
-                // Case: NovaLink Series
-                if (upperSpec === 'NLB') {
-                    return { type: 'Downlight Blade', keyword: 'Downlight Blade' };
-                }
-                if (['NL2', 'NL4', 'NLC'].includes(upperSpec)) {
-                    // "If there is NO in the code version is Non-Illuminated"
-                    if (segments.some(s => s === 'NO')) {
-                        return { type: 'Non-Illuminated', keyword: 'Non-Illuminated' };
-                    }
-                    if (upperSpec === 'NLC') {
-                        return { type: 'Corner', keyword: 'Corner' };
-                    }
-                    // Else NL2, NL4 = Static White Outdoor
-                    return { type: 'Static White Outdoor', keyword: 'Static White Outdoor' };
-                }
-
-                // Add more model-specific detection rules here...
-
-                // Case: Duo Series (DUO4, DUO6, Duo 6)
-                // Maps simple "RGB" keyword to the specific long version string req for Sequence
-                if (['DUO4', 'DUO6'].includes(upperSpec) || upperSpec === 'DUO 6') {
-                    if (segments.some(s => s === 'RGB')) {
-                        return {
-                            type: 'RGB - RGB Uplight, White Downlight',
-                            keyword: 'RGB - RGB Uplight, White Downlight'
-                        };
-                    }
-                }
-
-                return null; // Use general heuristics
-            }
-        };
-
-        // =========================
-        // VERSION DETECTION
-        // =========================
-        const VersionDetector = {
-            validCCTCodes: (() => {
-                const temps = ['22', '25', '27', '30', '35', '40', '45', '50', '55', '57', '60', '65'], cris = ['7', '8', '9'], codes = [];
-                temps.forEach(t => cris.forEach(c => codes.push(t + c))); return codes;
-            })(),
-
-            detect(fullCode, specName = '') {
-                const upperCode = fullCode.toUpperCase(), segments = upperCode.split('-');
-                let baseType = null, baseKeyword = null;
-                let detectionSource = 'Unknown';
-
-                console.log(`[VersionDetector] START | Code="${fullCode}" | SpecName="${specName}"`);
-
-                // PHASE 0: Top Rule - Single Version Result
-                // If this Spec Name only has ONE unique version in the database, select it automatically
-                const possibleVersions = VersionResolver.getUniqueVersionsForSpec(specName);
-                console.log(`[VersionDetector] Phase 0 | Available versions: [${possibleVersions.join(', ')}]`);
-
-                if (possibleVersions.length === 1) {
-                    baseType = possibleVersions[0];
-                    baseKeyword = possibleVersions[0];
-                    detectionSource = 'Phase 0 (Auto-Selection: Single Version)';
-                    console.log(`[VersionDetector] Phase 0 MATCH | Only 1 version found, auto-selecting: "${baseType}"`);
-                }
-                // PHASE 1: Try Model-Specific Special Rules first
-                else {
-                    const customResult = SpecialRules.getCustomVersionDetection(specName, segments, this.validCCTCodes);
-                    if (customResult) {
-                        baseType = customResult.type;
-                        baseKeyword = customResult.keyword;
-                        detectionSource = 'Phase 1 (Special Rules)';
-                        console.log(`[VersionDetector] Phase 1 MATCH | SpecialRules returned: "${baseType}"`);
-                    }
-                    // PHASE 2: Fallback to General Heuristics
-                    else {
-                        console.log(`[VersionDetector] Phase 2 | Checking general heuristics...`);
-                        if (segments.some(s => s === 'TNW')) { baseType = 'Tunable White'; baseKeyword = 'Tunable White'; detectionSource = 'Phase 2 (TNW Keyword)'; }
-                        else if (segments.some(s => s === 'WDIM')) { baseType = 'Warm Dim'; baseKeyword = 'Warm Dim'; detectionSource = 'Phase 2 (WDIM Keyword)'; }
-                        else if (segments.some(s => s === 'RGB')) { baseType = 'RGB'; baseKeyword = 'RGB'; detectionSource = 'Phase 2 (RGB Keyword)'; }
-                        else if (segments.some(s => /^\d{3}C$/i.test(s))) {
-                            const seg = segments.find(s => /^\d{3}C$/i.test(s));
-                            if (this.validCCTCodes.includes(seg.slice(0, 3))) { baseType = 'W+RGB'; baseKeyword = 'W+RGB'; detectionSource = `Phase 2 (Pattern: ${seg})`; }
-                        } else if (segments.some(s => /^\d{3}U$/i.test(s))) {
-                            const seg = segments.find(s => /^\d{3}U$/i.test(s));
-                            if (this.validCCTCodes.includes(seg.slice(0, 3))) { baseType = 'W+Hue'; baseKeyword = 'W+Hue'; detectionSource = `Phase 2 (Pattern: ${seg})`; }
-                        } else if (segments.some(s => /^C\d{3}$/i.test(s))) {
-                            const seg = segments.find(s => /^C\d{3}$/i.test(s));
-                            if (this.validCCTCodes.includes(seg.slice(1))) { baseType = 'RGBW'; baseKeyword = 'RGBW'; detectionSource = `Phase 2 (Pattern: ${seg})`; }
-                        } else if (segments.some(s => /^\d{3}B$/i.test(s))) {
-                            const seg = segments.find(s => /^\d{3}B$/i.test(s));
-                            if (this.validCCTCodes.includes(seg.slice(0, 3))) { baseType = 'Tunable White'; baseKeyword = 'Tunable White'; detectionSource = `Phase 2 (Pattern: ${seg})`; }
-                        } else if (segments.some(s => /^\d{3}$/.test(s) && this.validCCTCodes.includes(s))) {
-                            baseType = 'Static White'; baseKeyword = 'Static White'; detectionSource = 'Phase 2 (Static White CCT)';
+                        const candidateBox = { x, y, z, l: boxDim.l, w: boxDim.w, h: boxDim.h };
+                        for (let other of currentPacked) {
+                            if (intersect(candidateBox, other)) return false;
                         }
 
-                        if (baseType) {
-                            console.log(`[VersionDetector] Phase 2 MATCH | Heuristic: "${detectionSource}" -> "${baseType}"`);
-                        } else {
-                            console.log(`[VersionDetector] Phase 2 | No heuristic match found.`);
-                        }
-                    }
-                }
-
-                // Apply Outdoor/NAT overrides unless specifically disabled
-                if ((upperCode.includes('OUT') || upperCode.includes('NAT')) && !SpecialRules.ignoreOutdoorDetection(specName)) {
-                    console.log(`[VersionDetector] OUTDOOR OVERRIDE | OUT/NAT detected, switching to Outdoor. Secondary: "${baseKeyword}"`);
-                    return { type: 'Outdoor', keyword: 'Outdoor', detected: true, secondaryKeyword: baseKeyword };
-                }
-
-                console.log(`[VersionDetector] FINAL | Type="${baseType}" | Source="${detectionSource}"`);
-                return { type: baseType, keyword: baseKeyword, detected: !!baseType };
-            }
-        };
-
-        const ModelDetector = {
-            findBySpecName(specName) {
-                return AppData.dataTable.find(item => getObjVal(item, 'Spec Name').toUpperCase() === specName.toUpperCase());
-            }
-        };
-
-        const VersionResolver = {
-            getUniqueVersionsForSpec(specName) {
-                const filtered = AppData.dataTable.filter(item => getObjVal(item, 'Spec Name').toUpperCase() === specName.toUpperCase());
-                return [...new Set(filtered.map(item => getObjVal(item, 'Version')))].filter(Boolean).sort();
-            },
-
-            findVersion(specName, versionKeyword, secondaryKeyword, modelName = '') {
-                const versionsInTable = this.getUniqueVersionsForSpec(specName);
-                let tableMatches = versionsInTable.filter(v => v.toUpperCase().includes(versionKeyword.toUpperCase()));
-
-                // Refine matches using SpecialRules to avoid collisions (e.g., RGB matching W+RGB)
-                tableMatches = SpecialRules.refineVersionMatches(tableMatches, versionKeyword);
-
-                if (tableMatches.length > 1 && secondaryKeyword) {
-                    const refined = tableMatches.filter(v => v.toUpperCase().includes(secondaryKeyword.toUpperCase()));
-                    if (refined.length > 0) tableMatches = refined;
-                }
-                const tableResult = tableMatches[0];
-
-                // Robust Group Sentence Matcher
-                // Matches if Spec Name OR Model equals specName OR modelName
-                const upperSpec = specName.toUpperCase();
-                const upperModel = modelName.toUpperCase();
-
-                let groupMatches = AppData.groupSentence.filter(item => {
-                    const rowSpec = getObjVal(item, 'Spec Name').toUpperCase();
-                    const rowModel = getObjVal(item, 'Model').toUpperCase();
-
-                    const nameMatch = (rowSpec === upperSpec) ||
-                        (upperModel && rowModel === upperModel) ||
-                        (upperModel && rowSpec === upperModel);
-
-                    const ver = getObjVal(item, 'Version').toUpperCase();
-                    return nameMatch && ver.includes(versionKeyword.toUpperCase());
-                });
-
-                // Refine Group Sentence matches as well
-                const groupVersions = groupMatches.map(m => getObjVal(m, 'Version'));
-                const refinedGroupVersions = SpecialRules.refineVersionMatches(groupVersions, versionKeyword);
-                groupMatches = groupMatches.filter(m => refinedGroupVersions.includes(getObjVal(m, 'Version')));
-
-                let groupMatch = null;
-                if (groupMatches.length > 1 && secondaryKeyword) {
-                    groupMatch = groupMatches.find(item => getObjVal(item, 'Version').toUpperCase().includes(secondaryKeyword.toUpperCase()));
-                }
-                if (!groupMatch) groupMatch = groupMatches[0];
-
-                let finalVersion = groupMatch ? getObjVal(groupMatch, 'Version') : tableResult;
-                let finalSequence = groupMatch ? (getObjVal(groupMatch, 'Sequence') || getObjVal(groupMatch, 'Group Sequence')) : null;
-
-                // SPECIAL OVERRIDE FOR NOVALINK SERIES
-                const isNovaLink = (modelName && modelName.toUpperCase().includes('NOVALINK')) ||
-                    (['NL2', 'NL4', 'NLC'].includes(specName.toUpperCase()));
-                if (isNovaLink) {
-                    if (finalVersion === 'Static White Outdoor') {
-                        finalSequence = "Model, Wattage, CCT/CRI, Voltage, Dimming, Finish, Mounting, Rating";
-                    } else if (finalVersion === 'Corner') {
-                        finalSequence = "Model, Wattage, CCT/CRI, Voltage, Dimming, Finish, Rating";
-                    } else if (finalVersion === 'Non-Illuminated') {
-                        finalSequence = "Model, Wattage, Finish, Mounting";
-                    }
-                }
-
-                return {
-                    version: finalVersion,
-                    sequence: finalSequence
-                };
-            }
-        };
-
-        const ProductAnalyzer = {
-            analyze(fullLineText) {
-                // Pre-processing to extract raw code and quantity
-                const trimmedLine = fullLineText.trim();
-                const match = trimmedLine.match(/^(.*?)\s+[xX]\s*([0-9]+)$/) || [null, trimmedLine, "1"];
-                let rawCode = match[1].trim();
-                const quantity = match[2];
-
-                // PASS 1: Analyze Original Code to find Model & Sequence
-                let result = this._analyzeCore(rawCode, quantity);
-
-                // PASS 2: Sequence-Based Abbreviation Expansion
-                // Only expand if we have a sequence to guide us
-                if (result.sequence) {
-                    const groups = result.sequence.split(',').map(s => s.trim().toUpperCase());
-                    const segments = rawCode.split('-');
-                    let changed = false;
-
-                    const expandedSegments = segments.map((seg, index) => {
-                        // Safety check: index might be out of bounds if code is longer than sequence
-                        // But usually Model matches index 0
-
-                        // Map segment index to group
-                        // Note: segments[0] is SpecName/Model. groups[0] should be "Model".
-                        if (index >= groups.length) return seg;
-
-                        const group = groups[index];
-                        const upperSeg = seg.toUpperCase();
-
-                        // Check Voltage Group
-                        if (group.includes('VOLTAGE') && upperSeg === 'U') {
-                            changed = true;
-                            return 'UNV';
-                        }
-
-                        // Check Finish Group
-                        if (group.includes('FINISH')) {
-                            if (upperSeg === 'B') {
-                                changed = true;
-                                return 'BLK';
+                        if (y > 0) {
+                            let supported = false;
+                            const cx = x + boxDim.l / 2;
+                            const cz = z + boxDim.w / 2;
+                            for (let other of currentPacked) {
+                                if (Math.abs((other.y + other.h) - y) < 0.1) {
+                                    if (cx >= other.x && cx <= other.x + other.l && cz >= other.z && cz <= other.z + other.w) {
+                                        supported = true; break;
+                                    }
+                                }
                             }
-                            if (upperSeg === 'W') {
-                                changed = true;
-                                return 'WHT';
-                            }
+                            if (!supported) return false;
                         }
+                        return true;
+                    };
 
-                        return seg;
-                    });
-
-                    if (changed) {
-                        const newCode = expandedSegments.join('-');
-                        console.log(`[ProductAnalyzer] Expanded abbreviations: ${rawCode} -> ${newCode}`);
-                        // Re-run analysis with expanded code
-                        result = this._analyzeCore(newCode, quantity);
-                    }
-                } else {
-                    // Fallback: If no sequence found (detected model might be null), 
-                    // OR if model found but no sequence defined.
-                    // We can try the model-validity check here as a backup if we want,
-                    // but the user requirement was specific about Sequence.
-                    // For now, if no sequence, we leave it alone or maybe apply the basic check?
-                    // Let's stick to the strict Sequence rule for now as requested: "Sequence中若有...可簡寫 其他group不行"
-                }
-
-                return result;
-            },
-
-            _analyzeCore(rawCode, quantity) {
-                const segments = rawCode.split('-');
-                const specName = segments[0].toUpperCase();
-                const modelMatch = ModelDetector.findBySpecName(specName);
-                const modelName = modelMatch ? (getObjVal(modelMatch, 'Model Name') || getObjVal(modelMatch, 'Model') || specName) : null;
-                const versionResult = VersionDetector.detect(rawCode, specName);
-
-                let confirmedVersion = null, sequence = null, availableVersions = [];
-                if (modelMatch) {
-                    availableVersions = VersionResolver.getUniqueVersionsForSpec(specName);
-                    if (versionResult.detected) {
-                        const res = VersionResolver.findVersion(specName, versionResult.keyword, versionResult.secondaryKeyword, modelName);
-                        if (res) { confirmedVersion = res.version; sequence = res.sequence; }
-                    }
-                }
-
-                return {
-                    rawCode, quantity, specName, modelFound: !!modelMatch, modelName,
-                    confirmedVersion, sequence, availableVersions,
-                    versionDetected: versionResult.detected, versionType: versionResult.type
-                };
-            }
-        };
-
-        // =========================
-        // PRICE CONFIGURATION (Extensible)
-        // =========================
-        const PriceConfig = {
-            priceColumns: ['Price_Standard', 'Price_Canada'],
-            segmentColumn: 'Code',
-            groupColumn: 'Group',
-            annotationColumn: 'Annotation',
-            conflictColumn: 'Conflict',
-            defaultPrice: 0
-        };
-
-        // =========================
-        // SEQUENCE VALIDATOR (Non-blocking)
-        // =========================
-        const SequenceValidator = {
-            validate(segments, expectedSequence, specName, version, modelName) {
-                if (!expectedSequence) return [];
-                const warnings = [];
-                const sequenceParts = expectedSequence.split(',').map(s => s.trim());
-                const upperModel = modelName ? modelName.toUpperCase() : '';
-                const upperVersion = version ? version.toUpperCase() : '';
-
-                const segmentGroups = segments.slice(1).map(seg => {
-                    const upperSeg = seg.toUpperCase();
-                    // Identify the group for this segment using our core matching logic
-                    const match = AppData.dataTable.find(row => {
-                        const rowModel = getObjVal(row, 'Model').toUpperCase();
-                        const rowVersion = getObjVal(row, 'Version').toUpperCase();
-                        const rowSpec = getObjVal(row, 'Spec Name').toUpperCase();
-
-                        // 1. Model Check
-                        if (rowModel !== upperModel) return false;
-
-                        // 2. Version Check (incl generic)
-                        const versionMatch = !version || rowVersion === '' || rowVersion === upperVersion;
-                        if (!versionMatch) return false;
-
-                        // 3. Segment Match (Spec Name column holds component codes)
-                        const baseCode = rowSpec.replace(/\s*\(.*\)/, '').trim();
-                        return rowSpec === upperSeg || baseCode === upperSeg;
-                    });
-                    const g = match ? getObjVal(match, PriceConfig.groupColumn) : null;
-                    if (match) {
-                        console.log(`[SequenceValidator] Found Segment "${seg}" -> Group "${g}"`);
-                    } else {
-                        console.log(`[SequenceValidator] Segment "${seg}" -> Not found or No Match`);
-                    }
-                    return g;
-                }).filter(Boolean);
-
-                // Debug: list what we found
-                console.log(`[SequenceValidator] Sequence Required: ${sequenceParts.join(', ')}`);
-                console.log(`[SequenceValidator] Found Groups: ${segmentGroups.join(', ')}`);
-
-                // Check for missing required groups (skipping first part of sequence which is the spec name)
-                sequenceParts.slice(1).forEach(group => {
-                    if (group !== 'Accessories' && !segmentGroups.includes(group)) {
-                        console.log(`[SequenceValidator] Missing required group: "${group}"`);
-                        warnings.push(`Missing "${group}" segment`);
-                    }
-                });
-                return warnings;
-            }
-        };
-
-        // =========================
-        // PRICE LOOKUP MODULE
-        // =========================
-        const PriceLookup = {
-            extractWattage(rawCode) {
-                const segments = rawCode.split('-');
-                if (segments.length < 2) return null;
-                const match = segments[1].match(/^\d+/);
-                return match ? parseInt(match[0], 10) : null;
-            },
-
-            parseWattageRange(bracketText) {
-                // Extract numbers from within brackets, handling optional 'W' suffix
-                // Matches: (80W), (110-140W), (180W-220W)
-                const innerContent = bracketText.match(/\((.*?)\)/);
-                if (!innerContent) return null;
-
-                const parts = innerContent[1].match(/(\d+)/g);
-                if (!parts) return null;
-
-                const min = parseInt(parts[0], 10);
-                const max = parts.length > 1 ? parseInt(parts[1], 10) : min;
-                return { min, max };
-            },
-
-            isWattageInRange(wattage, range) {
-                if (!range || wattage === null) return false;
-                return wattage >= range.min && wattage <= range.max;
-            },
-
-            findSegmentPrice(specName, segment, version, wattage, modelName, expectedGroup = null) {
-                const upperSeg = segment.toUpperCase();
-                const upperVersion = version ? version.toUpperCase() : '';
-                const upperModel = modelName ? modelName.toUpperCase() : '';
-                const upperExpectedGroup = expectedGroup ? expectedGroup.toUpperCase() : null;
-
-                // DEBUG LOGGING
-                console.log(`[PriceLookup] Segment="${segment}" | Model="${modelName}" | Version="${version}" | ExpectedGroup="${expectedGroup}" | Wattage=${wattage}`);
-
-                // STEP 1: Filter by Model Name first
-                let filteredData = AppData.dataTable.filter(row => {
-                    const rowModel = getObjVal(row, 'Model').toUpperCase();
-                    return rowModel === upperModel;
-                });
-                console.log(`[PriceLookup] After Model filter: ${filteredData.length} rows (Model="${upperModel}")`);
-
-                // STEP 2: Filter by Version
-                if (version) {
-                    filteredData = filteredData.filter(row => {
-                        const rowVersion = getObjVal(row, 'Version').toUpperCase();
-                        return rowVersion === '' || rowVersion === upperVersion;
-                    });
-                    console.log(`[PriceLookup] After Version filter: ${filteredData.length} rows (Version="${upperVersion}")`);
-                }
-
-                // STEP 3: Match the Segment Code against the 'Spec Name' column
-                let matches = filteredData.filter(row => {
-                    const rowCode = getObjVal(row, 'Spec Name').toUpperCase();
-                    const baseCode = rowCode.replace(/\s*\(.*\)/, '').trim();
-                    return baseCode === upperSeg || rowCode === upperSeg;
-                });
-
-                // ============================================================
-                // STEP 3.5: FILTER BY EXPECTED GROUP (Sequence-based disambiguation)
-                // ============================================================
-                if (upperExpectedGroup) {
-                    // Start of User-Requested Debug Logging for Group Matching
-                    console.log(`[PriceLookup] DEBUG: Segment="${segment}" (Expected Group: "${upperExpectedGroup}")`);
-                    if (matches.length > 0) {
-                        matches.forEach(m => {
-                            const dbGroup = getObjVal(m, PriceConfig.groupColumn).toUpperCase();
-                            const isMatch = dbGroup === upperExpectedGroup;
-                            console.log(`   -> Check DB Row: Group="${dbGroup}" | Expected="${upperExpectedGroup}" | Exact Match? ${isMatch}`);
-                        });
-                    } else {
-                        console.log(`   -> No initial matches found for code "${segment}" to check groups against.`);
-                    }
-
-                    if (matches.length > 0) {
-                        const groupFiltered = matches.filter(row => {
-                            const rowGroup = getObjVal(row, PriceConfig.groupColumn).toUpperCase();
-                            return rowGroup === upperExpectedGroup;
-                        });
-
-                        if (groupFiltered.length > 0) {
-                            console.log(`[PriceLookup] Group filter applied: "${expectedGroup}" -> ${groupFiltered.length} matches (was ${matches.length})`);
-                            matches = groupFiltered;
-                        } else {
-                            // No matches in expected group - clear matches (item doesn't exist for this model/version in this group)
-                            console.log(`[PriceLookup] Group filter "${expectedGroup}" found no matches - segment not in expected group`);
-                            matches = [];
-                        }
-                    }
-                }
-
-                // ============================================================
-                // SPECIAL LOGIC: CUSTOM RULES (Handled by SpecialRules)
-                // ============================================================
-                if (matches.length === 0) {
-                    matches = SpecialRules.getCustomSegmentMatches(upperSeg, filteredData);
-                    if (matches.length > 0) {
-                        console.log(`[PriceLookup] matched custom rule: ${upperSeg} -> ${getObjVal(matches[0], 'Spec Name')}`);
-                    }
-                }
-                // ============================================================
-
-                if (matches.length === 0) {
-                    return { segment, found: false, error: 'Not found' };
-                }
-
-                // STEP 4: Prioritize exact version match if multiple exist
-                let exactMatches = matches;
-                if (version && matches.length > 1) {
-                    const exact = matches.filter(m => {
-                        const rowVersion = getObjVal(m, 'Version').toUpperCase();
-                        return rowVersion === upperVersion;
-                    });
-                    if (exact.length > 0) exactMatches = exact;
-                }
-
-                // STEP 5: If wattage provided, try bracket matching for components like drivers
-                let bestMatch = exactMatches[0];
-                let foundWattageMatch = false;
-
-                if (exactMatches.length > 1 && wattage !== null) {
-                    for (const m of exactMatches) {
-                        const code = getObjVal(m, 'Spec Name');
-                        const bracketMatch = code.match(/\(.*\)/);
-                        if (bracketMatch) {
-                            const range = this.parseWattageRange(bracketMatch[0]);
-                            if (range && this.isWattageInRange(wattage, range)) {
-                                bestMatch = m;
-                                foundWattageMatch = true;
+                    // Find spot
+                    for (let pt of anchorPoints) {
+                        for (let orient of uniqueOrientations) {
+                            if (isValidPos(orient, pt.x, pt.y, pt.z, currentPalletPacked)) {
+                                bestFit = { x: pt.x, y: pt.y, z: pt.z, l: orient.l, w: orient.w, h: orient.h };
                                 break;
                             }
                         }
+                        if (bestFit) break;
                     }
 
-                    // If we checked for wattage but didn't find a valid range match, 
-                    // and ALL options had brackets, we might be picking the wrong one by defaulting to [0].
-                    // But usually, one of them SHOULD match. If none match, we stick with the first one 
-                    // or potentially return an error? For now, we keep the default but log it.
-                    if (!foundWattageMatch) {
-                        console.log(`[PriceLookup] Warning: Wattage ${wattage} provided but no matching bracket range found in candidates.`);
-                    }
-                }
-
-                const codeValue = getObjVal(bestMatch, 'Spec Name');
-                const groupValue = getObjVal(bestMatch, PriceConfig.groupColumn);
-                const annotationValue = getObjVal(bestMatch, PriceConfig.annotationColumn);
-                const conflictValue = getObjVal(bestMatch, PriceConfig.conflictColumn);
-                const prices = {};
-                PriceConfig.priceColumns.forEach(col => {
-                    const val = getObjVal(bestMatch, col);
-                    prices[col] = val ? parseFloat(val) || 0 : 0;
-                });
-
-                return {
-                    segment,
-                    code: codeValue,
-                    group: groupValue,
-                    annotation: annotationValue,
-                    conflictRaw: conflictValue,
-                    prices,
-                    found: true
-                };
-            },
-
-            getResultState(resultItem) {
-                const rawCode = resultItem.querySelector('.code-snippet')?.textContent?.trim() || '';
-                const quantity = parseInt(resultItem.querySelector('.qty-input')?.value || '1', 10);
-                const versionSelect = resultItem.querySelector('.select-fallback');
-                const versionDisplay = resultItem.querySelector('.version-name b');
-                const modelDisplay = resultItem.querySelector('.model-name b');
-
-                let version = '';
-                if (versionSelect && versionSelect.value) {
-                    version = versionSelect.value;
-                } else if (versionDisplay) {
-                    version = versionDisplay.textContent.trim();
-                }
-
-                const modelName = modelDisplay ? modelDisplay.textContent.trim() : '';
-                const specName = rawCode.split('-')[0]?.toUpperCase() || '';
-
-                // Fetch sequence directly from Group Sentence tab based on specName/modelName and version
-                let sequence = '';
-                if (version && (specName || modelName)) {
-                    const upperSpecName = specName.toUpperCase();
-                    const upperModelName = modelName.toUpperCase();
-                    const upperVersion = version.toUpperCase();
-
-                    // Debug: show what we have in Group Sentence
-                    if (AppData.groupSentence.length > 0) {
-                        const sample = AppData.groupSentence[0];
-                        console.log(`[getResultState] Group Sentence columns: ${Object.keys(sample).join(', ')}`);
-                    }
-
-                    // First, try EXACT match on Spec Name AND Version
-                    let groupMatch = AppData.groupSentence.find(item => {
-                        const rowSpec = getObjVal(item, 'Spec Name').toUpperCase();
-                        const rowVersion = getObjVal(item, 'Version').toUpperCase();
-                        return rowSpec === upperSpecName && rowVersion === upperVersion;
-                    });
-
-                    // Fallback: Try flexible matching if exact match not found
-                    if (!groupMatch) {
-                        groupMatch = AppData.groupSentence.find(item => {
-                            const rowSpec = getObjVal(item, 'Spec Name').toUpperCase();
-                            const rowModel = getObjVal(item, 'Model').toUpperCase();
-                            const rowVersion = getObjVal(item, 'Version').toUpperCase();
-
-                            // Try matching on Spec Name OR Model column
-                            const nameMatch = rowSpec === upperSpecName ||
-                                rowSpec === upperModelName ||
-                                rowModel === upperModelName ||
-                                rowModel === upperSpecName;
-
-                            // Version matching (strict)
-                            const versionMatch = rowVersion === upperVersion;
-
-                            return nameMatch && versionMatch;
-                        });
-                    }
-
-                    if (groupMatch) {
-                        sequence = getObjVal(groupMatch, 'Sequence') || getObjVal(groupMatch, 'Group Sequence') || '';
-                        console.log(`[getResultState] Found sequence from Group Sentence: "${sequence}"`);
+                    if (bestFit) {
+                        const packedBox = { ...item, ...bestFit };
+                        currentPalletPacked.push(packedBox);
+                        // New Anchors
+                        anchorPoints.push({ x: bestFit.x, y: bestFit.y + bestFit.h, z: bestFit.z });
+                        anchorPoints.push({ x: bestFit.x + bestFit.l, y: bestFit.y, z: bestFit.z });
+                        anchorPoints.push({ x: bestFit.x, y: bestFit.y, z: bestFit.z + bestFit.w });
                     } else {
-                        console.log(`[getResultState] No Group Sentence match for SpecName="${specName}", ModelName="${modelName}", Version="${version}"`);
-                        // Debug: show first few Group Sentence entries
-                        AppData.groupSentence.slice(0, 3).forEach((item, i) => {
-                            console.log(`[getResultState] Sample ${i}: Spec="${getObjVal(item, 'Spec Name')}", Model="${getObjVal(item, 'Model')}", Version="${getObjVal(item, 'Version')}"`);
-                        });
-                    }
-
-                    // SPECIAL OVERRIDE FOR DUO 4/6 RGB (Sync with VersionResolver)
-                    // Force specific sequence to match strictly with database group names
-                    if (version === 'RGB - RGB Uplight, White Downlight') {
-                        const upperModel = modelName.toUpperCase();
-                        const upperSpec = specName.toUpperCase();
-                        if (['DUO4', 'DUO6'].includes(upperSpec) || upperSpec === 'DUO 6' || upperModel.includes('DUO')) {
-                            sequence = "Model, Wattage, CCT/CRI Downlight, CCT/CRI Uplight, Voltage, Dimming, Beam Angle Downlight, Beam Angle Uplight, Finish, Mounting";
-                            console.log(`[getResultState] Applied Hardcoded Sequence Override for Duo RGB: "${sequence}"`);
-                        }
-                    }
-
-                    // SPECIAL OVERRIDE FOR NOVALINK SERIES (Sync with VersionResolver)
-                    const isNovaLink = (modelName && modelName.toUpperCase().includes('NOVALINK')) ||
-                        (['NL2', 'NL4', 'NLC'].includes(specName.toUpperCase()));
-                    if (isNovaLink) {
-                        if (version === 'Static White Outdoor') {
-                            sequence = "Model, Wattage, CCT/CRI, Voltage, Dimming, Finish, Mounting, Rating";
-                        } else if (version === 'Corner') {
-                            sequence = "Model, Wattage, CCT/CRI, Voltage, Dimming, Finish, Rating";
-                        } else if (version === 'Non-Illuminated') {
-                            sequence = "Model, Wattage, Finish, Mounting";
-                        }
-                        if (sequence) console.log(`[getResultState] Applied Hardcoded Sequence Override for NovaLink: "${sequence}"`);
+                        nextBatchItems.push(item);
                     }
                 }
 
-                return { rawCode, quantity, version, specName, sequence, modelName };
-            },
-
-            lookupAllPrices(resultItem) {
-                const state = this.getResultState(resultItem);
-                if (!state.rawCode || !state.version) {
-                    return { error: 'Please select a version first', items: [], totals: {} };
-                }
-
-                // Include ALL segments including the first one (e.g., TSC)
-                const segments = state.rawCode.split('-');
-                const wattage = this.extractWattage(state.rawCode);
-                const items = [];
-                const totals = {};
-                PriceConfig.priceColumns.forEach(col => totals[col] = 0);
-
-                // CHECK FOR DUPLICATE SEGMENTS (for logging purposes)
-                const upperSegments = segments.map(s => s.toUpperCase());
-                const hasDuplicates = upperSegments.length !== new Set(upperSegments).size;
-
-                // ALWAYS parse Sequence into expected group list for proper filtering
-                let sequenceGroups = [];
-                let useSequenceFiltering = false;
-
-                if (state.sequence) {
-                    sequenceGroups = state.sequence.split(',').map(s => s.trim());
-                    useSequenceFiltering = sequenceGroups.length > 0;
-                    console.log(`[PriceLookup] Using sequence-based filtering${hasDuplicates ? ' (DUPLICATES DETECTED)' : ''}`);
-                    console.log(`[PriceLookup] Sequence groups: [${sequenceGroups.join(', ')}]`);
-                } else {
-                    console.log(`[PriceLookup] WARNING: No sequence available - using standard lookup`);
-                }
-
-                // Track position in the sequence as we process segments
-                let sequenceIndex = 0;
-
-
-                segments.forEach((seg, segIndex) => {
-                    const upperSeg = seg.toUpperCase();
-                    let expectedGroup = null;
-
-                    // Only determine expected group if sequence filtering is active
-                    if (useSequenceFiltering) {
-                        // Determine expected group based on sequence position
-                        if (sequenceIndex < sequenceGroups.length) {
-                            expectedGroup = sequenceGroups[sequenceIndex];
-                        } else {
-                            // Sequence exhausted - assume Accessories
-                            expectedGroup = 'Accessories';
-                        }
-
-                        // Special handling for Rating (NAT/OUT) - can appear after Accessories
-                        if (upperSeg === 'NAT' || upperSeg === 'OUT') {
-                            expectedGroup = 'Rating';
-                        }
-
-                        console.log(`[PriceLookup] Segment ${segIndex}: "${seg}" | Expected Group: "${expectedGroup}" | Sequence Index: ${sequenceIndex}`);
-                    }
-
-                    const result = this.findSegmentPrice(state.specName, seg, state.version, wattage, state.modelName, expectedGroup);
-                    items.push(result);
-
-                    if (result.found) {
-                        PriceConfig.priceColumns.forEach(col => {
-                            totals[col] += result.prices[col] || 0;
-                        });
-
-                        // Advance sequence index only if using sequence filtering
-                        if (useSequenceFiltering) {
-                            // Advance sequence index only if:
-                            // 1. We matched within the sequence range AND
-                            // 2. The matched group equals the expected group (not Accessories being flexible)
-                            const matchedGroup = result.group?.toUpperCase() || '';
-                            const expectedUpper = expectedGroup?.toUpperCase() || '';
-
-                            if (sequenceIndex < sequenceGroups.length) {
-                                // Check if we should advance
-                                if (matchedGroup === expectedUpper || matchedGroup === sequenceGroups[sequenceIndex]?.toUpperCase()) {
-                                    sequenceIndex++;
-                                } else if (matchedGroup === 'ACCESSORIES') {
-                                    // Accessory found mid-sequence - don't advance, accessories are flexible
-                                    console.log(`[PriceLookup] Accessory "${seg}" found mid-sequence, not advancing index`);
-                                } else {
-                                    // Matched something else - still advance to keep pace
-                                    sequenceIndex++;
-                                }
-                            }
-                        }
-                    } else {
-                        // Not found - still advance sequence to keep pace (if using sequence filtering)
-                        if (useSequenceFiltering && sequenceIndex < sequenceGroups.length) {
-                            sequenceIndex++;
-                        }
-                    }
-                });
-
-
-                // CONFLICT DETECTION
-                const conflictsFound = [];
-                const activeSpecs = items.filter(it => it.found).map(it => ({
-                    group: it.group?.toUpperCase(),
-                    code: it.code?.toUpperCase(),
-                    originalSeg: it.segment
-                }));
-
-                items.forEach(it => {
-                    if (it.found && it.conflictRaw) {
-                        // Regex matches [Group, Spec Name]
-                        const matches = [...it.conflictRaw.matchAll(/\[(.*?),\s*(.*?)\]/g)];
-                        matches.forEach(m => {
-                            const targetGroup = m[1].trim().toUpperCase();
-                            const targetCode = m[2].trim().toUpperCase();
-
-                            // Check for cross-conflict
-                            const conflictMatch = activeSpecs.find(s =>
-                                s.group === targetGroup && s.code === targetCode
-                            );
-
-                            if (conflictMatch) {
-                                conflictsFound.push(`<b>${it.segment}</b> conflicts with <b>${conflictMatch.originalSeg}</b>`);
-                            }
-                        });
-                    }
-                });
-
-                // Sequence validation (non-blocking) - Use groups already identified by PriceLookup
-                const warnings = [];
-                if (state.sequence) {
-                    const sequenceParts = state.sequence.split(',').map(s => s.trim());
-                    // Get unique groups found from PriceLookup results
-                    const foundGroups = items.filter(it => it.found && it.group).map(it => it.group);
-
-                    // User Request: Detailed validation logging
-                    console.log("=== WARNING GENERATION ===");
-                    console.log("Sequence being validated:", state.sequence);
-                    console.log("Parsed Components:", sequenceParts);
-                    console.log("Database Groups Found:", foundGroups);
-
-                    // Check for missing required groups (skip Model and Accessories)
-                    sequenceParts.forEach(group => {
-                        if (group !== 'Model' && group !== 'Accessories' && group !== 'Rating') {
-                            if (!foundGroups.includes(group)) {
-                                console.log(`   ❌ Missing: "${group}" (Check strict match against found groups)`);
-                                warnings.push(`Missing "${group}" segment`);
-                            } else {
-                                console.log(`   ✅ Found: "${group}"`);
-                            }
-                        }
-                    });
-                }
-
-                return { items, totals, quantity: state.quantity, warnings, conflicts: conflictsFound };
+                return { packed: currentPalletPacked, remaining: nextBatchItems };
             }
-        };
 
-        // =========================
-        // UI CONTROLLER
-        // =========================
-        const dropZone = document.getElementById('drop-zone'), fileInput = document.getElementById('file-input'),
-            fileStatus = document.getElementById('file-status'), searchBtn = document.getElementById('search-btn'),
-            priceBtn = document.getElementById('price-btn'),
-            codeInput = document.getElementById('code-input'), resultsArea = document.getElementById('results'),
-            progressIndicator = document.getElementById('progress');
+            // Phase 1: Pack assigned items
+            palletTypes.forEach(pType => {
+                let assignedItems = itemsToPack.filter(item => item.targetPalletId === pType.id.toString());
+                itemsToPack = itemsToPack.filter(item => item.targetPalletId !== pType.id.toString());
 
-        dropZone.onclick = () => fileInput.click();
-        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
-        dropZone.ondragleave = dropZone.ondrop = () => dropZone.classList.remove('dragover');
-        dropZone.ondrop = (e) => { e.preventDefault(); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
-        fileInput.onchange = (e) => { if (e.target.files.length) handleFile(e.target.files[0]); };
-
-        function handleFile(file) {
-            fileStatus.innerHTML = `Loading...`;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-                    const findS = (n) => workbook.SheetNames.find(s => s.trim().toLowerCase() === n.toLowerCase());
-                    const ts = findS('DataTable');
-                    if (!ts) throw new Error('DataTable tab missing');
-                    AppData.dataTable = XLSX.utils.sheet_to_json(workbook.Sheets[ts]);
-                    // Try to find Group Sequence sheet (primary name) or alternatives
-                    console.log('[DEBUG] Available sheet names:', workbook.SheetNames);
-                    let gs = findS('Group Sequence');
-                    if (!gs) gs = findS('Group Sentence');
-                    if (!gs) gs = findS('GroupSequence');
-                    if (!gs) gs = findS('Sequence');
-
-                    if (gs) {
-                        AppData.groupSentence = XLSX.utils.sheet_to_json(workbook.Sheets[gs]);
-                        console.log(`[DEBUG] Group Sentence loaded from sheet "${gs}" with ${AppData.groupSentence.length} rows`);
-                        if (AppData.groupSentence.length > 0) {
-                            console.log('[DEBUG] Group Sentence columns:', Object.keys(AppData.groupSentence[0]));
-                            console.log('[DEBUG] Group Sentence sample row:', AppData.groupSentence[0]);
-                        }
-                    } else {
-                        console.log('[DEBUG] WARNING: No Group Sentence/Sequence sheet found!');
-                        AppData.groupSentence = [];
+                while (assignedItems.length > 0) {
+                    let result = packOnePalletInstance(assignedItems, pType);
+                    if (result.packed.length === 0) {
+                        globalFailedItems.push(...result.remaining);
+                        break;
                     }
-
-                    AppData.uniqueModels = [...new Set(AppData.dataTable.map(item => getObjVal(item, 'Model Name') || getObjVal(item, 'Model')))].filter(Boolean).sort();
-
-                    // DEBUG: Log column names and sample data
-                    if (AppData.dataTable.length > 0) {
-                        console.log('[DEBUG] DataTable loaded with', AppData.dataTable.length, 'rows');
-                        console.log('[DEBUG] Column names:', Object.keys(AppData.dataTable[0]));
-                        console.log('[DEBUG] Sample row (first):', AppData.dataTable[0]);
-                        console.log('[DEBUG] Sample row (10th):', AppData.dataTable[9]);
-                        // Show unique Spec Name values (first 20)
-                        const uniqueSpecs = [...new Set(AppData.dataTable.map(r => getObjVal(r, 'Spec Name')))].slice(0, 20);
-                        console.log('[DEBUG] Sample Spec Names:', uniqueSpecs);
-                        // Show unique Version values
-                        const uniqueVersions = [...new Set(AppData.dataTable.map(r => getObjVal(r, 'Version')))].filter(Boolean).slice(0, 20);
-                        console.log('[DEBUG] Sample Versions:', uniqueVersions);
-                    }
-
-                    fileStatus.innerHTML = `<span style="color:#2ea043">✓ Synced: ${file.name}</span>`;
-                    dropZone.classList.add('file-loaded');
-                    searchBtn.disabled = false;
-                } catch (err) { fileStatus.innerHTML = `<span style="color:#f85149">${err.message}</span>`; }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        searchBtn.onclick = () => {
-            const lines = codeInput.value.trim().split('\n').filter(l => l.trim());
-            if (!lines.length) return;
-            resultsArea.innerHTML = '';
-            progressIndicator.classList.add('visible');
-            setTimeout(() => {
-                lines.forEach(processLine);
-                progressIndicator.classList.remove('visible');
-                priceBtn.disabled = false; // Enable Find Prices after search
-            }, 100);
-        };
-
-        priceBtn.onclick = () => {
-            const resultItems = resultsArea.querySelectorAll('.result-item');
-            const grandTotals = {};
-            PriceConfig.priceColumns.forEach(col => grandTotals[col] = 0);
-
-            resultItems.forEach(item => {
-                // Remove old price section if exists
-                const oldSection = item.querySelector('.price-section');
-                if (oldSection) oldSection.remove();
-
-                const priceResult = PriceLookup.lookupAllPrices(item);
-                const priceSection = document.createElement('div');
-                priceSection.className = 'price-section';
-
-                let html = '';
-
-                // Show error if no version
-                if (priceResult.error) {
-                    html = `<div class="price-warning">⚠ ${priceResult.error}</div>`;
-                    priceSection.innerHTML = html;
-                    item.appendChild(priceSection);
-                    return;
+                    allPalletsData.push({
+                        config: pType,
+                        boxes: result.packed
+                    });
+                    assignedItems = result.remaining;
                 }
-
-                // Show Conflicts Found (High Priority)
-                if (priceResult.conflicts && priceResult.conflicts.length > 0) {
-                    html += `<div class="price-conflict">
-                        <div class="price-conflict-title">⚠ SPECIFICATION CONFLICT</div>
-                        ${priceResult.conflicts.map(c => `<div>- ${c}</div>`).join('')}
-                    </div>`;
-                }
-
-                // Show warnings (non-blocking)
-                if (priceResult.warnings && priceResult.warnings.length > 0) {
-                    html += `<div class="price-warning">⚠ ${priceResult.warnings.join(', ')}</div>`;
-                }
-
-                // Price table header
-                html += `<table class="price-table"><thead><tr>
-                    <th>Segment</th><th>Group</th><th>Annotation</th>`;
-                PriceConfig.priceColumns.forEach(col => {
-                    const label = col.replace('Price_', '');
-                    html += `<th style="text-align:right">${label}</th>`;
-                });
-                html += `</tr></thead><tbody>`;
-
-                // Price rows
-                priceResult.items.forEach(item => {
-                    html += `<tr>`;
-                    if (item.found) {
-                        html += `<td class="segment-code">${item.code}</td>`;
-                        html += `<td class="segment-group">${item.group || '-'}</td>`;
-                        html += `<td class="segment-annotation" style="font-size: 0.85em; color: #666;">${item.annotation || '-'}</td>`;
-                        PriceConfig.priceColumns.forEach(col => {
-                            const price = item.prices[col] || 0;
-                            const cls = price === 0 ? 'price-cell price-zero' : 'price-cell';
-                            html += `<td class="${cls}">$${price.toFixed(2)}</td>`;
-                        });
-                    } else {
-                        html += `<td class="segment-code">${item.segment}</td>`;
-                        html += `<td class="segment-group">-</td>`;
-                        html += `<td class="segment-annotation">-</td>`;
-                        html += `<td class="price-error" colspan="${PriceConfig.priceColumns.length}">${item.error}</td>`;
-                    }
-                    html += `</tr>`;
-                });
-
-                html += `</tbody></table>`;
-
-                // Summary
-                html += `<div class="price-summary">`;
-                html += `<div class="price-summary-row">
-                    <span class="price-summary-label">Unit Total:</span>
-                    <div class="price-summary-values">`;
-                PriceConfig.priceColumns.forEach(col => {
-                    const label = col.replace('Price_', '');
-                    html += `<span>${label}: $${priceResult.totals[col].toFixed(2)}</span>`;
-                });
-                html += `</div></div>`;
-
-                html += `<div class="price-summary-row total">
-                    <span>× ${priceResult.quantity} =</span>
-                    <div class="price-summary-values">`;
-                PriceConfig.priceColumns.forEach(col => {
-                    const total = priceResult.totals[col] * priceResult.quantity;
-                    grandTotals[col] += total; // Accumulate to grand total
-                    html += `<span>$${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`;
-                });
-                html += `</div></div></div>`;
-
-                priceSection.innerHTML = html;
-                item.appendChild(priceSection);
             });
 
-            // ============================================
-            // RENDER GRAND TOTAL
-            // ============================================
-            const oldTotal = document.getElementById('grand-total-card');
-            if (oldTotal) oldTotal.remove();
+            // Phase 2: Pack remaining "Auto" items
+            let palletIndex = 0;
+            while (itemsToPack.length > 0) {
+                const currentPalletConfig = palletIndex < palletTypes.length ? palletTypes[palletIndex] : palletTypes[palletTypes.length - 1];
 
-            if (resultItems.length > 0) {
-                const totalDiv = document.createElement('div');
-                totalDiv.id = 'grand-total-card';
-                // Styles to match the retro aesthetic but stand out
-                totalDiv.style.cssText = `
-                    background-color: #ffffff;
-                    border: 4px solid var(--accent-color);
-                    padding: 25px;
-                    margin-top: 30px;
-                    box-shadow: 6px 6px 0px 0px #000000;
-                    animation: slideIn 0.3s ease forwards;
-                    position: relative;
-                `;
+                let result = packOnePalletInstance(itemsToPack, currentPalletConfig);
 
-                let totalHtml = `
-                    <div class="result-header" style="border-bottom: 2px solid var(--accent-color); padding-bottom:15px; margin-bottom: 20px;">
-                        <span class="code-snippet" style="font-size: 1.8em; color: var(--accent-color); letter-spacing: -1px;">GRAND TOTAL PRICE</span>
-                        <div style="font-size:0.9em; font-weight:800; color:#555; text-transform:uppercase;">All ${resultItems.length} Items</div>
-                    </div>
-                    <div class="price-summary-values" style="display: flex; justify-content: space-around; font-size: 1.6em; font-weight: 800; color: var(--success-color);">
-                `;
+                if (result.packed.length === 0) {
+                    globalFailedItems.push(...result.remaining);
+                    break;
+                }
 
-                PriceConfig.priceColumns.forEach(col => {
-                    const label = col.replace('Price_', '').toUpperCase() + ' TOTAL';
-                    const val = grandTotals[col];
-                    totalHtml += `
-                        <div style="display:flex; flex-direction:column; align-items:center; gap: 5px;">
-                            <span style="font-size:0.5em; color:#000; letter-spacing:1px; font-weight:700;">${label}</span>
-                            <span>$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                    `;
+                allPalletsData.push({
+                    config: currentPalletConfig,
+                    boxes: result.packed
+                });
+                itemsToPack = result.remaining; // Continue with remaining items for next pallet
+                palletIndex++;
+            }
+
+            // 4. Results
+            currentPalletIndex = 0;
+            updateGlobalStats(allPalletsData.length, globalFailedItems.length);
+            if (allPalletsData.length > 0) {
+                renderPallet(0);
+            } else {
+                alert("無法裝載任何箱子 (可能是箱子比棧板大)");
+            }
+        }
+
+        function renderPallet(index) {
+            if (index < 0 || index >= allPalletsData.length) return;
+
+            const palletData = allPalletsData[index];
+            const packedItems = palletData.boxes;
+            const palletConfig = palletData.config;
+
+            updatePalletVisuals(palletConfig);
+
+            const geometryCache = {};
+
+            packedItems.forEach(box => {
+                const geoKey = `${box.l}-${box.h}-${box.w}`;
+                if (!geometryCache[geoKey]) {
+                    geometryCache[geoKey] = new THREE.BoxGeometry(box.l, box.h, box.w);
+                }
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: box.color,
+                    transparent: true,
+                    opacity: 0.85,
+                    roughness: 0.4,
+                    metalness: 0.1
                 });
 
-                totalHtml += `</div>`;
-                totalDiv.innerHTML = totalHtml;
-                resultsArea.appendChild(totalDiv);
+                const mesh = new THREE.Mesh(geometryCache[geoKey], material);
+                mesh.position.set(
+                    box.x + box.l / 2,
+                    box.y + box.h / 2 + palletConfig.h,
+                    box.z + box.w / 2
+                );
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
 
-                // Auto-scroll to show the total
-                setTimeout(() => totalDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
-            }
-        };
+                const edges = new THREE.EdgesGeometry(geometryCache[geoKey]);
+                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true }));
+                mesh.add(line);
 
-        function processLine(lineText) {
-            const res = ProductAnalyzer.analyze(lineText);
-            const div = document.createElement('div');
-            div.className = 'result-item';
+                scene.add(mesh);
+                boxMeshes.push(mesh);
+            });
 
-            let html = `
-            <div class="result-header">
-                <span class="code-snippet">${res.rawCode}</span>
-                <div class="qty-container">
-                    <span class="qty-label">Quantity</span>
-                    <input type="text" class="qty-input" value="${res.quantity}">
-                </div>
-            </div>
-        `;
-
-            if (res.modelFound) {
-                html += `<div class="model-name">Model: <b>${res.modelName}</b></div>`;
-                if (res.confirmedVersion) {
-                    html += `
-                    <div class="version-name">
-                        <span>Version: <b>${res.confirmedVersion}</b></span>
-                        <button class="override-btn" onclick="let group = this.closest('.result-item').querySelector('.fallback-group'); group.classList.toggle('hidden')">Override</button>
-                    </div>
-                `;
-                    if (res.sequence) html += `<div class="sequence-info">Sequence: ${res.sequence}</div>`;
-
-                    // Hidden dropdown for override
-                    html += `
-                    <div class="fallback-group hidden">
-                        <span class="fallback-label">Manual Override:</span>
-                        <select class="select-fallback">
-                            <option value="">Select manually...</option>
-                            ${res.availableVersions.map(v => `<option value="${v}" ${v === res.confirmedVersion ? 'selected' : ''}>${v}</option>`).join('')}
-                        </select>
-                    </div>
-                `;
-                } else {
-                    const title = res.versionDetected ? `Version (detected): <b>${res.versionType}</b> <span style="color:#d29922">(not verified)</span>` : `<span class="failure">Version: Not detected</span>`;
-                    html += `<div class="version-name">${title}</div>`;
-                    html += `
-                    <div class="fallback-group">
-                        <span class="fallback-label">Available in database:</span>
-                        <select class="select-fallback">
-                            <option value="">Select to confirm...</option>
-                            ${res.availableVersions.map(v => `<option value="${v}">${v}</option>`).join('')}
-                        </select>
-                    </div>
-                `;
-                }
-            } else {
-                html += `<div class="failure" style="margin-bottom:10px">Model not found for "${res.specName}"</div>
-                <div class="fallback-group">
-                    <span class="fallback-label">Select manual model:</span>
-                    <select class="select-fallback"><option value="">Select...</option>${AppData.uniqueModels.map(m => `<option value="${m}">${m}</option>`).join('')}</select>
-                </div>`;
-            }
-
-            div.innerHTML = html;
-            resultsArea.appendChild(div);
+            updateCurrentPalletStats(index);
         }
+
+        function updateGlobalStats(totalPallets, failedCount) {
+            document.getElementById('resultsOverlay').classList.remove('hidden');
+            document.getElementById('totalPalletsCount').innerText = totalPallets;
+            document.getElementById('globalFailedCount').innerText = failedCount;
+        }
+
+        function updateCurrentPalletStats(index) {
+            const palletData = allPalletsData[index];
+            const packed = palletData.boxes;
+            const palletConfig = palletData.config;
+            const pL = palletConfig.l;
+            const pW = palletConfig.w;
+            const maxH = palletConfig.maxH;
+
+            const maxStackH = packed.reduce((max, b) => Math.max(max, b.y + b.h), 0);
+            const totalHeightWithPallet = maxStackH > 0 ? maxStackH + palletConfig.h : 0;
+            const actualVol = packed.reduce((sum, b) => sum + (b.l * b.w * b.h), 0);
+            const utilization = maxStackH > 0 ? ((actualVol / (pL * pW * (maxH - palletConfig.h))) * 100).toFixed(1) : 0;
+
+            document.getElementById('currentPalletNum').innerText = index + 1;
+            document.getElementById('resPacked').innerText = packed.length;
+            document.getElementById('resHeight').innerText = totalHeightWithPallet.toFixed(1);
+            document.getElementById('resVol').innerText = utilization + '%';
+
+            // Update Buttons
+            document.getElementById('prevPalletBtn').disabled = (index === 0);
+            document.getElementById('nextPalletBtn').disabled = (index === allPalletsData.length - 1);
+        }
+
+        function switchPallet(direction) {
+            const newIndex = currentPalletIndex + direction;
+            if (newIndex >= 0 && newIndex < allPalletsData.length) {
+                currentPalletIndex = newIndex;
+                renderPallet(currentPalletIndex);
+            }
+        }
+
+        function toggleSidebar() {
+            const el = document.getElementById('sidebar');
+            if (el.classList.contains('-translate-x-full')) {
+                el.classList.remove('-translate-x-full');
+            } else {
+                el.classList.add('-translate-x-full');
+            }
+        }
+
+        init3D();
+
+        // Add default pallet to avoid empty state issues at start
+        document.getElementById('palletL').value = 120;
+        document.getElementById('palletW').value = 100;
+        document.getElementById('palletH').value = 15;
+        document.getElementById('maxH').value = 200;
+        addPalletType();
+
+        addBoxType();
+
     </script>
 </body>
 
